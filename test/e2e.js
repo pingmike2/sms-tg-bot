@@ -22,7 +22,7 @@ globalThis.fetch = async (input, init) => {
 
 const env = {
   BOT_TOKEN: "123:TEST",
-  OWNER_ID: "7870073609",
+  OWNER_ID: "123456789",
   WEBHOOK_SECRET: "s3cret",
   UPSTREAM: "https://tempsmss.com",
 };
@@ -47,13 +47,13 @@ async function run(label, update) {
   if (!calls.length) console.log("(无回包)");
 }
 
-const msg = (text) => ({ message: { message_id: 1, chat: { id: 7870073609 }, from: { id: 7870073609 }, text } });
+const msg = (text) => ({ message: { message_id: 1, chat: { id: 123456789 }, from: { id: 123456789 }, text } });
 
 (async () => {
   await run("非主人", { message: { message_id: 2, chat: { id: 1 }, from: { id: 999 }, text: "hi" } });
   await run("/start", msg("/start"));
   await run("US 列表", msg("🇺🇸 US"));
-  await run("点号码未命中缓存(slug)", { callback_query: { id: "q", from: { id: 7870073609 }, message: { chat: { id: 7870073609 } }, data: "n:us-otp-verification-code-818" } });
+  await run("点号码未命中缓存(slug)", { callback_query: { id: "q", from: { id: 123456789 }, message: { chat: { id: 123456789 } }, data: "n:us-otp-verification-code-818" } });
   await run("搜 openai", msg("openai"));
   await run("贴号码", msg("+19898885938"));
 })().catch((e) => console.error("FATAL", e));
