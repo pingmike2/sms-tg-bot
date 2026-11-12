@@ -36,7 +36,7 @@ const SITES = [
   { id: "tempnumber", name: "temp-number", home: "https://temp-number.com/", ok: false, note: "需登录" },
   { id: "clearcode", name: "clearcode", home: "https://clearcode.cn/", ok: false, note: "动态加载" },
   { id: "smsverification", name: "sms-verification", home: "https://sms-verification-number.com/free-numbers-cn/", ok: false, note: "CF 拦截" },
-  { id: "mianfeijiema", name: "mianfeijiema", home: "https://www.mianfeijiema.com/", ok: false, note: "需注册" },
+  { id: "mianfeijiema", name: "mianfeijiema", home: "https://www.mianfeijiema.com/", ok: true },
   { id: "receivesmss", name: "receive-smss", home: "https://receive-smss.com/", ok: false, note: "CF 拦截" },
   { id: "smsman", name: "sms-man", home: "https://sms-man.com/cn/free-numbers", ok: false, note: "CF 拦截" },
 ];
@@ -294,6 +294,40 @@ const ADAPTERS = {
         if (msgs.length >= 15) break;
       }
       return { phone: "+" + num, msgs };
+    },
+  },
+
+  mianfeijiema: {
+    list: async () => {
+      const html = await getText("https://www.mianfeijiema.com/", 45);
+      const out = [], seen = new Set();
+      // 号码页 /sms/<号码>，页面同时给全号
+      for (const m of html.matchAll(/href="\/sms\/(\d{8,15})"/g)) {
+        if (seen.has(m[1])) continue;
+        seen.add(m[1]);
+        out.push({ phone: "+" + m[1], slug: m[1], lastSms: "" });
+      }
+      return sortByActivity(out);
+    },
+    read: async (slug) => {
+      const html = await getText(`https://www.mianfeijiema.com/sms/${slug}`, 0);
+      const msgs = [];
+      // 消息结构：div.rowbox.message_details > .sender / .msg / .time
+      for (const b of html.split(/class="rowbox message_details"/).slice(1)) {
+        const sender = plain((/col-md-3 sender">([\s\S]*?)<\/div>/.exec(b) || [, ""])[1]);
+        const msgHtml = (/col-md-6 msg">([\s\S]*?)<\/div>/.exec(b) || [, ""])[1];
+        const time = plain((/col-md-3 time">([\s\S]*?)<\/div>/.exec(b) || [, ""])[1]);
+        // 广告行跳过
+        if (!msgHtml || /adsbygoogle|pagead2/.test(msgHtml)) continue;
+        // 验证码优先取 data-clipboard-text（站点自己给的明文）
+        const clip = (/data-clipboard-text="([^"]*)"/.exec(msgHtml) || [])[1] || "";
+        let text = plain(msgHtml).trim();
+        if (text.length < 5) continue;
+        const code = clip || (/(?<![\d-])(\d{3}[- ]\d{3})(?![\d-])/.exec(text) || [])[1] || (/(?<![\d-])(\d{4,8})(?![\d-])/.exec(text) || [])[1] || "";
+        msgs.push({ from: sender.slice(0, 26), body: text.slice(0, 240), time, code, masked: /•/.test(text) });
+        if (msgs.length >= 15) break;
+      }
+      return { phone: "+" + slug, msgs };
     },
   },
 
