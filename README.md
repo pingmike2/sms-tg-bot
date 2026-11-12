@@ -57,13 +57,12 @@ Worker 内缓存 45~60 秒，避免重复打站。免费版 50 subrequest 上限
 | `tiger-sms` | ✅ | ✅ | 带 Active 徽章与 Last SMS 时间 |
 | `freereceivesms` | ✅ | ✅ | 完整国际号码 |
 | `supercloudsms` | ✅ | ✅ | |
-| `wetalkapp` | ✅ | ✅ | |
 | `mianfeijiema` | ✅ | ✅ | 18 个号，验证码带 `data-clipboard-text` 明文，15/15 解出 |
 | `receive-sms.cc` | ✅ | ✅ | 24 个号，`div.con` 明文，如 `Account: 786132` / `Verification code: 6914` |
 | `sms-receive.net` | ✅ | ⚠️ | 列表 85 个号，但读码接口对现有号码全返 `[]` |
 | 其余 22 个 | — | — | CF 拦截 / 需登录 / 纯 JS 渲染 / 需注册，按钮里不出现 |
 
-站点清单来自导航站 Tools → Free SMS 分区，共 31 个，其中 9 个可直接用；不可用的也保留在
+站点清单来自导航站 Tools → Free SMS 分区，共 30 个，其中 8 个可直接用；不可用的也保留在
 「全部站点状态」里并注明原因，方便日后上游恢复时快速接回。
 
 ### tempsmss 验证码解密

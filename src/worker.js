@@ -14,7 +14,6 @@ const SITES = [
   { id: "smsreceive", name: "sms-receive.net", home: "https://sms-receive.net/", ok: true },
   { id: "smsonline_co", name: "sms-online.co", home: "https://sms-online.co/receive-free-sms", ok: false, note: "CF TLS 指纹拦截" },
   { id: "supercloudsms", name: "supercloudsms", home: "https://www.supercloudsms.com/country/usa/1.html", ok: true },
-  { id: "wetalkapp", name: "wetalkapp", home: "https://wetalkapp.com/receive-sms/", ok: true },
   { id: "freereceivesms", name: "freereceivesms", home: "https://www.freereceivesms.com/", ok: true },
   { id: "smser", name: "smser", home: "https://smser.net/", ok: false, note: "API 需登录" },
   { id: "sms24", name: "sms24", home: "https://sms24.me/en", ok: false, note: "CF 拦截" },
@@ -444,37 +443,6 @@ const ADAPTERS = {
     },
   },
 
-  wetalkapp: {
-    // ⚠️ 读码接口 GET https://api.wetalkapp.com/web/smslist 强制阿里云验证码
-    //   缺 captchaVerifyParam 一律 403 "clientParam Error"，无法纯 HTTP 读取。
-    //   只做列表，read 明确返回不可用，不拿页面噪声冒充短信。
-    list: async () => {
-      const html = await getText("https://wetalkapp.com/receive-sms/", 45);
-      const out = [], seen = new Set();
-      // 只认号码页：receive-sms-online-<country>-<digits>
-      for (const m of html.matchAll(/https:\/\/wetalkapp\.com\/(receive-sms-online-[a-z]{2,12}-\d{7,15})\/?["'\/]/g)) {
-        if (seen.has(m[1])) continue;
-        seen.add(m[1]);
-        // 号码取 slug 里的完整数字，绝不用 alt/图片里的打码值
-        out.push({ phone: "+" + m[1].split("-").pop(), slug: m[1] });
-      }
-      return out;
-    },
-    read: async (slug) => {
-      const num = slug.split("-").pop();
-      const html = await getText(`https://wetalkapp.com/${slug}/`, 0);
-      // 页面上就算有消息也只是 SSR 骨架，真数据在 JS 拉取后才有
-      const hasVue = /apiBase\s*=\s*"https:\/\/api\.wetalkapp\.com"/.test(html);
-      return {
-        phone: "+" + num,
-        msgs: [],
-        ok: false,
-        note: hasVue
-          ? "读码接口 api.wetalkapp.com/web/smslist 需阿里云滑块验证码，纯 HTTP 403 clientParam Error"
-          : "页面无消息，接口不可直读",
-      };
-    },
-  },
 
   freereceivesms: {
     list: async () => {
@@ -646,7 +614,7 @@ async function handle(env, up) {
   return send(
     env,
     chatId,
-    `<b>接码聚合</b>\n\n覆盖导航站 Tools→Free SMS 全部 ${SITES.length} 个站点，其中 <b>7 个可直接用</b>：\ntempsmss / tiger-sms / sms-receive.net / sms-online.co / supercloudsms / wetalkapp / freereceivesms\n\n点按钮选站点，或直接发号码。`,
+    `<b>接码聚合</b>\n\n覆盖导航站 Tools→Free SMS 全部 ${SITES.length} 个站点，其中 <b>7 个可直接用</b>：\ntempsmss / tiger-sms / sms-receive.net / supercloudsms / freereceivesms / mianfeijiema / receive-sms.cc\n\n点按钮选站点，或直接发号码。`,
     { reply_markup: siteKB() }
   );
 }
