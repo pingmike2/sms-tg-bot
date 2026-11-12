@@ -37,6 +37,7 @@ const SITES = [
   { id: "clearcode", name: "clearcode", home: "https://clearcode.cn/", ok: false, note: "动态加载" },
   { id: "smsverification", name: "sms-verification", home: "https://sms-verification-number.com/free-numbers-cn/", ok: false, note: "CF 拦截" },
   { id: "mianfeijiema", name: "mianfeijiema", home: "https://www.mianfeijiema.com/", ok: true },
+  { id: "receivesmscc", name: "receive-sms.cc", home: "https://receive-sms.cc/", ok: true },
   { id: "receivesmss", name: "receive-smss", home: "https://receive-smss.com/", ok: false, note: "CF 拦截" },
   { id: "smsman", name: "sms-man", home: "https://sms-man.com/cn/free-numbers", ok: false, note: "CF 拦截" },
 ];
@@ -328,6 +329,50 @@ const ADAPTERS = {
         if (msgs.length >= 15) break;
       }
       return { phone: "+" + slug, msgs };
+    },
+  },
+
+  receivesmscc: {
+    list: async () => {
+      const html = await getText("https://receive-sms.cc/", 45);
+      const out = [], seen = new Set();
+      // 链接形如 /US-Phone-Number/12543207598
+      for (const m of html.matchAll(/href="\/([A-Za-z-]+-Phone-Number)\/(\d{7,15})"/g)) {
+        if (seen.has(m[2])) continue;
+        seen.add(m[2]);
+        out.push({ phone: "+" + m[2], slug: `${m[1]}/${m[2]}`, lastSms: "" });
+      }
+      // 部分站把号放在标题里
+      if (!out.length) {
+        for (const m of html.matchAll(/href="\/(\d{7,15})"/g)) {
+          if (seen.has(m[1])) continue;
+          seen.add(m[1]);
+          out.push({ phone: "+" + m[1], slug: m[1], lastSms: "" });
+        }
+      }
+      return out;
+    },
+    read: async (slug) => {
+      const url = slug.includes("/") ? `https://receive-sms.cc/${slug}` : `https://receive-sms.cc/${slug}`;
+      const html = await getText(url, 0);
+      const msgs = [];
+      // 每条：div.form(From X) + span.time + div.con(正文)
+      for (const b of html.split(/class="row list-message"/).slice(1)) {
+        for (const it of b.split(/<div class="item">/).slice(1)) {
+          const from = plain((/class="form">([\s\S]*?)<\/div>/.exec(it) || [, ""])[1]).replace(/^From\s*/i, "");
+          const time = plain((/class="time">([\s\S]*?)<\/span>/.exec(it) || [, ""])[1]);
+          const text = plain((/class="con">([\s\S]*?)<\/div>/.exec(it) || [, ""])[1]).trim();
+          if (!text || text.length < 4) continue;
+          if (/^\s*No messages?\b/i.test(text)) continue;
+          const code = (/(?<![\d-])(\d{3}[- ]\d{3})(?![\d-])/.exec(text) || [])[1]
+            || (/(?<![\d-])(\d{4,8})(?![\d-])/.exec(text) || [])[1] || "";
+          msgs.push({ from: from.slice(0, 26), body: text.slice(0, 240), time, code, masked: /•/.test(text) });
+          if (msgs.length >= 15) break;
+        }
+        if (msgs.length >= 15) break;
+      }
+      const ph = (/\+?(\d{10,15})/.exec(slug.split("/").pop() || "") || [])[1] || slug;
+      return { phone: "+" + ph, msgs };
     },
   },
 
