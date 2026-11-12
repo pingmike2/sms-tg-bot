@@ -136,11 +136,17 @@ const ADAPTERS = {
         const seg = html.slice(m.index, m.index + 1400);
         const h3 = /<h3>([\s\S]{0,40}?)<\/h3>/.exec(seg);
         let ph = h3 ? plain(h3[1]).replace(/\D/g, "") : "";
-        // 号太短说明 h3 取到的是打码值，退回 data-phone
+        // 号太短说明 h3 取到的是打码值，依次退回 data-phone / slug 尾部数字
         if (!/^\d{9,15}$/.test(ph)) {
           const dp = /data-phone="(\d{9,15})"/.exec(seg);
-          ph = dp ? dp[1] : ph;
+          if (dp) ph = dp[1];
         }
+        if (!/^\d{9,15}$/.test(ph)) {
+          const tail = /(\d{9,15})$/.exec(m[1]);
+          if (tail) ph = tail[1];
+        }
+        // 还凑不出完整号就留空，让上层按 slug 显示，不展示 +1****17 这种残号
+        if (!/^\d{9,15}$/.test(ph)) ph = "";
         // 卡片里有 "Last SMS N minutes ago" / "Added N hours ago"
         const ptxt = plain(seg);
         const lastSms = (/Last SMS\s+(\d+\s+(?:second|minute|hour|day|month|year)s?\s+ago|just now)/i.exec(ptxt) || [])[1] || "";
@@ -439,6 +445,9 @@ const ADAPTERS = {
   },
 
   wetalkapp: {
+    // ⚠️ 读码接口 GET https://api.wetalkapp.com/web/smslist 强制阿里云验证码
+    //   缺 captchaVerifyParam 一律 403 "clientParam Error"，无法纯 HTTP 读取。
+    //   只做列表，read 明确返回不可用，不拿页面噪声冒充短信。
     list: async () => {
       const html = await getText("https://wetalkapp.com/receive-sms/", 45);
       const out = [], seen = new Set();
@@ -446,32 +455,24 @@ const ADAPTERS = {
       for (const m of html.matchAll(/https:\/\/wetalkapp\.com\/(receive-sms-online-[a-z]{2,12}-\d{7,15})\/?["'\/]/g)) {
         if (seen.has(m[1])) continue;
         seen.add(m[1]);
+        // 号码取 slug 里的完整数字，绝不用 alt/图片里的打码值
         out.push({ phone: "+" + m[1].split("-").pop(), slug: m[1] });
       }
       return out;
     },
     read: async (slug) => {
+      const num = slug.split("-").pop();
       const html = await getText(`https://wetalkapp.com/${slug}/`, 0);
-      const msgs = [];
-      // 优先结构：<article> 里的消息块
-      for (const art of html.split(/<article[^>]*>/).slice(1)) {
-        const t = plain(art).slice(0, 400);
-        if (t.length < 15) continue;
-        if (/通知|Cookie|Privacy|Privacy Policy|复制/.test(t) && t.length < 40) continue;
-        msgs.push({ body: t.slice(0, 220), from: "", time: (/(\d+\s*(?:天|小时|分钟|days?|hours?|minutes?)\s*(?:前|ago))/.exec(t) || [""])[1], code: (/\b\d{4,8}\b/.exec(t) || [""])[0] });
-        if (msgs.length >= 12) break;
-      }
-      if (!msgs.length) {
-        const txt = plain(html);
-        for (const m of txt.matchAll(/([\s\S]{15,240}?)\s+(\d+\s*(?:天前|小时前|分钟前|days? ago|hours? ago|minutes? ago))/g)) {
-          const body = m[1].trim();
-          if (!/[A-Za-z0-9\u4e00-\u9fa5]{8,}/.test(body)) continue;
-          if (/Welcome|Copyright|Privacy|在线接收|本站/.test(body)) continue;
-          msgs.push({ body: body.slice(-200), time: m[2], from: "", code: (/\b\d{4,8}\b/.exec(body) || [""])[0] });
-          if (msgs.length >= 12) break;
-        }
-      }
-      return { phone: "+" + slug.split("-").pop(), msgs };
+      // 页面上就算有消息也只是 SSR 骨架，真数据在 JS 拉取后才有
+      const hasVue = /apiBase\s*=\s*"https:\/\/api\.wetalkapp\.com"/.test(html);
+      return {
+        phone: "+" + num,
+        msgs: [],
+        ok: false,
+        note: hasVue
+          ? "读码接口 api.wetalkapp.com/web/smslist 需阿里云滑块验证码，纯 HTTP 403 clientParam Error"
+          : "页面无消息，接口不可直读",
+      };
     },
   },
 
@@ -548,7 +549,8 @@ function phoneKB(siteId, items) {
   const top = items.slice(0, 16);
   for (let i = 0; i < top.length; i += 2) {
     rows.push(top.slice(i, i + 2).map((it) => {
-      const label = it.phone && !it.phone.includes("*") ? it.phone : "+" + String(it.slug).replace(/\D/g, "").slice(-10);
+      // 直接用适配器给的号；只有真没有时才从 slug 抽完整数字（不截尾、不加 *）
+      const label = it.phone || "+" + String(it.slug).replace(/\D/g, "");
       return { text: (it.active ? "🟢 " : "") + label, callback_data: `r:${siteId}:${it.slug}` };
     }));
   }
@@ -558,6 +560,8 @@ function phoneKB(siteId, items) {
 
 function fmtMsgs(site, res) {
   const head = `<b>${esc(site.name)}</b> · <code>${esc(res.phone || "?")}</code>`;
+  // 适配器明确标记不可读时，把原因原样告诉用户，不装成“暂无短信”
+  if (res.ok === false) return `${head}\n⛔ ${esc(res.note || "该站不可读码")}`;
   if (!res.msgs.length) return `${head}\n暂无短信（可能需要刷新，或该号已失效）。`;
   const body = res.msgs.slice(0, 6).map((m) => {
     const t = [m.time, m.from].filter(Boolean).join(" · ");
