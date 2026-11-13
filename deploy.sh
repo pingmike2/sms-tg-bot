@@ -26,7 +26,7 @@ if [ -z "$BASE" ]; then
   echo "（wrangler deploy 成功后会打印这个地址）"
   exit 1
 fi
-curl -s "$BASE/setup" -o /tmp/setup.json -w 'setup HTTP=%{http_code}\n'
+curl -s "$BASE/setup" -H "x-setup-token: $SECRET" -o /tmp/setup.json -w 'setup HTTP=%{http_code}\n'
 head -c 400 /tmp/setup.json
 echo
 # /setup 用的是 env.WEBHOOK_SECRET 回填 secret_token，需要等 secret 生效后再调一次

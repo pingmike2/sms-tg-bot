@@ -105,6 +105,8 @@ async function send(env, chatId, text, extra = {}) {
 function agoToSec(s) {
   if (!s) return Infinity;
   const t = String(s).toLowerCase();
+  // "just now" / "刚刚" 没有数字，必须显式当 0 秒，否则排到最后
+  if (/just now|刚刚|刚刚前|^\s*now\s*$/.test(t)) return 0;
   const n = parseFloat((/(\d+(?:\.\d+)?)/.exec(t) || [])[1]);
   if (!Number.isFinite(n)) return Infinity;
   if (/second|秒/.test(t)) return n;
@@ -622,10 +624,15 @@ async function handle(env, up) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    // 绑定 webhook 属敏感操作：必须带 secret_token，未配置时直接拒
     if (url.pathname === "/setup") {
+      if (!env.WEBHOOK_SECRET) return new Response("WEBHOOK_SECRET 未配置", { status: 500 });
+      if (request.headers.get("x-setup-token") !== env.WEBHOOK_SECRET) {
+        return new Response("forbidden", { status: 403 });
+      }
       return new Response(JSON.stringify(await tg(env, "setWebhook", {
         url: url.origin + "/tg/" + env.BOT_TOKEN,
-        secret_token: env.WEBHOOK_SECRET || undefined,
+        secret_token: env.WEBHOOK_SECRET,
         allowed_updates: ["message", "callback_query"],
         drop_pending_updates: true,
       }), null, 2), { headers: { "content-type": "application/json" } });
