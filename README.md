@@ -91,10 +91,10 @@ npx wrangler@latest tail tempsms-tg-bot
 npx wrangler@latest deploy
 
 # 重设 webhook（改了 secret 后要重跑）
-curl -s https://tempsms-tg-bot.PLACEHOLDER.workers.dev/setup
+curl -s "https://tempsms-tg-bot.<你的子域>.workers.dev/setup"
 
 # 健康检查（返回站点数与适配器数）
-curl -s https://tempsms-tg-bot.PLACEHOLDER.workers.dev/health
+curl -s "https://tempsms-tg-bot.<你的子域>.workers.dev/health"
 ```
 
 ### 机器人不回复怎么办

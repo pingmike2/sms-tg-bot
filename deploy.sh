@@ -19,7 +19,13 @@ echo "$BOT_TOKEN" | npx --yes wrangler@latest secret put BOT_TOKEN --name tempsm
 echo "$OWNER_ID"  | npx --yes wrangler@latest secret put OWNER_ID  --name tempsms-tg-bot >/dev/null 2>&1
 echo "$SECRET"     | npx --yes wrangler@latest secret put WEBHOOK_SECRET --name tempsms-tg-bot >/dev/null 2>&1
 
-BASE="https://tempsms-tg-bot.PLACEHOLDER.workers.dev"
+# Worker 地址：默认取 WORKER_URL，未设置时用 wrangler 输出的 <name>.<你的子域>.workers.dev
+BASE="${WORKER_URL:-}"
+if [ -z "$BASE" ]; then
+  echo "缺少 WORKER_URL，先 export WORKER_URL='https://tempsms-tg-bot.<你的子域>.workers.dev'"
+  echo "（wrangler deploy 成功后会打印这个地址）"
+  exit 1
+fi
 curl -s "$BASE/setup" -o /tmp/setup.json -w 'setup HTTP=%{http_code}\n'
 head -c 400 /tmp/setup.json
 echo
