@@ -624,18 +624,29 @@ async function handle(env, up) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    // 绑定 webhook 属敏感操作：必须带 secret_token，未配置时直接拒
-    if (url.pathname === "/setup") {
-      if (!env.WEBHOOK_SECRET) return new Response("WEBHOOK_SECRET 未配置", { status: 500 });
-      if (request.headers.get("x-setup-token") !== env.WEBHOOK_SECRET) {
-        return new Response("forbidden", { status: 403 });
+
+    // 注册 webhook：浏览器直接打开 /setup/<WEBHOOK_SECRET> 即可，不用命令行、不用加请求头
+    // （路径里那个值本身就是口令，别人猜不到；同时兼容 ?secret= 形式）
+    const setupPath = url.pathname.match(/^\/setup\/(.+)$/)?.[1];
+    if (url.pathname === "/setup" || setupPath) {
+      if (!env.WEBHOOK_SECRET) {
+        return new Response("WEBHOOK_SECRET 未配置：请先在 Settings → Variables 里加上再打开本页", { status: 500 });
       }
-      return new Response(JSON.stringify(await tg(env, "setWebhook", {
+      const token = setupPath ? decodeURIComponent(setupPath) : (url.searchParams.get("secret") || "");
+      if (token !== env.WEBHOOK_SECRET) {
+        return new Response("口令不对：请打开 /setup/你的WEBHOOK_SECRET", { status: 403 });
+      }
+      const res = await tg(env, "setWebhook", {
         url: url.origin + "/tg/" + env.BOT_TOKEN,
         secret_token: env.WEBHOOK_SECRET,
         allowed_updates: ["message", "callback_query"],
         drop_pending_updates: true,
-      }), null, 2), { headers: { "content-type": "application/json" } });
+      });
+      const ok = res?.ok === true;
+      return new Response(
+        (ok ? "✅ 注册成功，现在可以给机器人发 /start 了\n\n" : "❌ 注册失败\n\n") + JSON.stringify(res, null, 2),
+        { headers: { "content-type": "text/plain; charset=utf-8" } }
+      );
     }
     if (url.pathname === "/health") return new Response(`ok sites=${SITES.length} adapters=${Object.keys(ADAPTERS).length}`);
 

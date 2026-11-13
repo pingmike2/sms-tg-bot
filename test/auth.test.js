@@ -50,24 +50,31 @@ let worker;
     process.exit(1);
   }
 
-  // ---- /setup 鉴权 ----
+  // ---- /setup 鉴权（浏览器直接打开 /setup/<secret> 即可）----
   let r = await call("/setup");
-  ok("/setup 无 x-setup-token → 403", r.status === 403, `得到 ${r.status}`);
+  ok("/setup 无口令 → 403", r.status === 403, `得到 ${r.status}`);
 
-  r = await call("/setup", { headers: { "x-setup-token": "wrong" } });
-  ok("/setup 错误 token → 403", r.status === 403, `得到 ${r.status}`);
+  r = await call("/setup/wrong");
+  ok("/setup/错误口令 → 403", r.status === 403, `得到 ${r.status}`);
 
   tgCalls = [];
-  r = await call("/setup", { headers: { "x-setup-token": "s3cret" } });
-  ok("/setup 正确 token → 200", r.status === 200, `得到 ${r.status}`);
+  r = await call("/setup/s3cret");
+  ok("/setup/正确口令 → 200", r.status === 200, `得到 ${r.status}`);
+  const okText = await r.text();
+  ok("/setup 返回中文成功提示", /注册成功/.test(okText), okText.slice(0, 80));
   ok("/setup 调用了 setWebhook", tgCalls.some((c) => c.method === "setWebhook"), JSON.stringify(tgCalls.map((c) => c.method)));
   const sw = tgCalls.find((c) => c.method === "setWebhook");
   ok("setWebhook 带 secret_token", sw?.body?.secret_token === "s3cret", JSON.stringify(sw?.body?.secret_token));
   ok("setWebhook url 含 /tg/<token>", String(sw?.body?.url || "").includes("/tg/123:TESTTOKEN"), String(sw?.body?.url));
 
+  // ?secret= 形式也兼容
+  tgCalls = [];
+  r = await call("/setup?secret=s3cret");
+  ok("/setup?secret= 也能注册", r.status === 200 && tgCalls.some((c) => c.method === "setWebhook"), `得到 ${r.status}`);
+
   // ---- WEBHOOK_SECRET 未配置 ----
   const envNoSecret = { ...env, WEBHOOK_SECRET: "" };
-  r = await call("/setup", { headers: { "x-setup-token": "" } }, envNoSecret);
+  r = await call("/setup/anything", {}, envNoSecret);
   ok("未配 WEBHOOK_SECRET → 500", r.status === 500, `得到 ${r.status}`);
 
   // ---- /tg 路径鉴权 ----

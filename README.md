@@ -34,24 +34,19 @@
 
 ### 第 4 步：注册 webhook（把 Telegram 的消息转发给 Worker）
 
-> 必须先完成第 3 步并部署，`WEBHOOK_SECRET` 没配置时这一步会返回 `500 WEBHOOK_SECRET 未配置`。
-
-用浏览器打开下面这个地址（把三个 `<...>` 换成你自己的值）：
+**直接在浏览器打开这一行就完成了**（把 `WEBHOOK_SECRET` 换成第 3 步里你自己设的那串）：
 
 ```
-https://<你的worker子域>.workers.dev/setup
+https://<你的worker子域>.workers.dev/setup/<你的WEBHOOK_SECRET>
 ```
 
-> ⚠️ 这一步需要带请求头，浏览器直接打开会 403。用命令行代替：
+页面显示 `✅ 注册成功，现在可以给机器人发 /start 了` 就好了。
 
-```bash
-curl -X POST "https://<你的worker子域>.workers.dev/setup" \
-  -H "x-setup-token: <WEBHOOK_SECRET，和第3步一致>"
-```
+> `WEBHOOK_SECRET` 就是这步的口令，写在路径里别人猜不到。没配 Secret 打开会提示先配置；
+> 口令写错会返回 403。
 
-返回 `{"ok":true,...}` 就成功了。Telegram 会把消息推送到
-`https://<你的worker子域>.workers.dev/tg/<BOT_TOKEN>`，这个路径本身带 token，加上
-`x-telegram-bot-api-secret-token` 双边校验，其他人碰不到。
+注册后 Telegram 把消息推到 `https://<你的worker子域>.workers.dev/tg/<BOT_TOKEN>`，
+路径带 token + `x-telegram-bot-api-secret-token` 双边校验，其他人碰不到。
 
 ### 第 5 步：用起来
 
@@ -120,8 +115,8 @@ npx wrangler@latest tail <worker名>
 curl -s "https://<你的worker子域>.workers.dev/health"
 # → ok sites=30 adapters=8
 
-# 重设 webhook（改了 WEBHOOK_SECRET 后要重跑）
-curl -X POST "https://<你的worker子域>.workers.dev/setup" -H "x-setup-token: <新secret>"
+# 重设 webhook（改了 WEBHOOK_SECRET 后浏览器打开这个地址）
+# https://<你的worker子域>.workers.dev/setup/<你的WEBHOOK_SECRET>
 
 # 本地自检（仓库内，不需要部署）
 node test/parse.test.js   # 结构 + 纯函数 + 密钥扫描
