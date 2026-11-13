@@ -1,6 +1,6 @@
 # 贡献指南
 
-面向要改 `src/worker.js` 的人（包括未来接手的 AI）。只想**用**机器人的看 README。
+面向要改 `worker.js` 的人（包括未来接手的 AI）。只想**用**机器人的看 README。
 
 ## 硬约束（违反直接拒）
 
@@ -50,11 +50,12 @@ python3 test/probe_all.py  # 批量探测站点可达性
 - 提交前自己扫一遍敏感信息：
 
 ```bash
-grep -rinE "password|secret|token|api[_-]?key|ghp_" --include="*.js" --include="*.sh" --include="*.toml" .
+grep -rinE "password|secret|token|api[_-]?key|ghp_|workers\.dev" --include="*.js" --include="*.md" .
 ```
 
 `BOT_TOKEN` / `OWNER_ID` / `WEBHOOK_SECRET` / `CLOUDFLARE_API_TOKEN` 一律走
-`wrangler secret put`，任何真值都不进仓库。`deploy.sh` 只从环境变量读。
+`wrangler secret put`（或 Cloudflare 控制台 Variables）写入，任何真值都不进仓库。
+仓库里只有一个文件 `worker.js`，部署方式见 README 的手动部署教程。
 
 ## 发版
 

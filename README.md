@@ -4,25 +4,65 @@
 免费接码站点聚合成一个入口：点站点 → 选号码 → 直接看验证码，不用在十几个网站之间来回跳。
 默认只允许一个 Telegram 账号使用。
 
-## 一键安装
+整个仓库只有一个核心文件 **`worker.js`**，复制粘贴到 Cloudflare 控制台即可部署，不需要 npm、不需要 wrangler。
 
-```bash
-git clone https://github.com/pingmike2/sms-tg-bot.git
-cd sms-tg-bot
-export CLOUDFLARE_API_TOKEN='你的cf token'
-export CLOUDFLARE_ACCOUNT_ID='你的account id'
-export BOT_TOKEN='123456:ABC...'        # @BotFather 拿
-export OWNER_ID='你的telegram_user_id'   # @userinfobot 查
-npx wrangler@latest deploy
-bash deploy.sh                          # 写 secret + 注册 webhook
+## 部署教程（控制台手动操作，约 5 分钟）
+
+### 第 1 步：建一个 Bot 拿 Token
+
+1. 在 Telegram 里找 [@BotFather](https://t.me/BotFather)，发 `/newbot`
+2. 按提示起名，拿到形如 `123456:ABC-DEF...` 的 **Bot Token**（令牌）
+3. 记下你的 **Telegram 数字 ID**（找 [@userinfobot](https://t.me/userinfobot) 发任意消息即可看到）
+
+### 第 2 步：创建 Worker
+
+1. 打开 [Cloudflare Dashboard](https://dash.cloudflare.com/) → **Workers & Pages** → **Create** → **Worker** → 随便起个名字（如 `sms-tg-bot`）→ **Deploy**
+2. 点 **Edit code**（编辑代码），把 `worker.js` 的内容**全部选中、全部粘贴**进去，覆盖默认代码
+3. 右上角 **Deploy**（部署）保存
+
+### 第 3 步：设置环境变量（密钥）
+
+保持同一个 Worker 页面，点 **Settings**（设置）→ **Variables**（变量）：
+
+| 变量 | 必填 | 值 |
+|---|---|---|
+| `BOT_TOKEN` | 是 | 第 1 步拿到的 `123456:ABC...` |
+| `OWNER_ID` | 是 | 你的 Telegram 数字 ID（只允许这一个人用） |
+| `WEBHOOK_SECRET` | **是** | 自己生成一串（如 `openssl rand -hex 24`）。不填则 `/setup` 直接返回 500，无法注册 webhook |
+
+点 **Encrypt**（加密）保存三个变量；然后 **Deploy** 使变量生效。
+
+### 第 4 步：注册 webhook（把 Telegram 的消息转发给 Worker）
+
+> 必须先完成第 3 步并部署，`WEBHOOK_SECRET` 没配置时这一步会返回 `500 WEBHOOK_SECRET 未配置`。
+
+用浏览器打开下面这个地址（把三个 `<...>` 换成你自己的值）：
+
+```
+https://<你的worker子域>.workers.dev/setup
 ```
 
-部署完成后给机器人发 `/start`。
+> ⚠️ 这一步需要带请求头，浏览器直接打开会 403。用命令行代替：
+
+```bash
+curl -X POST "https://<你的worker子域>.workers.dev/setup" \
+  -H "x-setup-token: <WEBHOOK_SECRET，和第3步一致>"
+```
+
+返回 `{"ok":true,...}` 就成功了。Telegram 会把消息推送到
+`https://<你的worker子域>.workers.dev/tg/<BOT_TOKEN>`，这个路径本身带 token，加上
+`x-telegram-bot-api-secret-token` 双边校验，其他人碰不到。
+
+### 第 5 步：用起来
+
+给机器人发 `/start`，点站点按钮 → 选号码 → 看验证码。
+
+---
 
 ## 架构
 
 ```
-Telegram  ──webhook──▶  Worker (src/worker.js)
+Telegram  ──webhook──▶  Worker (worker.js)
                           │
                           ├─ 鉴权：路径含 BOT_TOKEN + secret_token 头，缺一 403
                           ├─ 白名单：from.id !== OWNER_ID → 拒（私有机器人）
@@ -38,18 +78,7 @@ Telegram  ──webhook──▶  Worker (src/worker.js)
 Worker 内缓存 45~60 秒，避免重复打站。免费版 50 subrequest 上限是硬约束：
 列表页只抓 1 次，读码时才多抓 1~2 次，不在列表阶段逐号抓落地页。
 
-## 配置
-
-| 变量 | 必填 | 说明 |
-|---|---|---|
-| `BOT_TOKEN` | 是 | Telegram bot token，`wrangler secret put BOT_TOKEN` 写入 |
-| `OWNER_ID` | 是 | 唯一允许使用的 Telegram user id |
-| `WEBHOOK_SECRET` | 建议 | 与 `setWebhook` 的 `secret_token` 一致，校验 `x-telegram-bot-api-secret-token` |
-| `UPSTREAM` | 否 | `wrangler.toml` 里的普通变量，默认 `https://tempsmss.com` |
-
-密钥全部走 `wrangler secret`，不落在仓库里。
-
-### 支持状态
+## 支持状态
 
 | 站点 | 列表 | 读码 | 说明 |
 |---|---|---|---|
@@ -81,25 +110,27 @@ Worker 内缓存 45~60 秒，避免重复打站。免费版 50 subrequest 上限
 
 验证码识别支持纯数字 4~8 位，也支持 `732-344` 这类分段格式（WhatsApp 用）。
 
-## 快速参考（运维）
+## 运维
 
 ```bash
-# 看实时日志
-npx wrangler@latest tail tempsms-tg-bot
-
-# 重新部署
-npx wrangler@latest deploy
-
-# 重设 webhook（改了 secret 后要重跑）
-curl -s "https://tempsms-tg-bot.<你的子域>.workers.dev/setup"
+# 看实时日志（Dashboard → Worker → Logs，或命令行：
+npx wrangler@latest tail <worker名>
 
 # 健康检查（返回站点数与适配器数）
-curl -s "https://tempsms-tg-bot.<你的子域>.workers.dev/health"
+curl -s "https://<你的worker子域>.workers.dev/health"
+# → ok sites=30 adapters=8
+
+# 重设 webhook（改了 WEBHOOK_SECRET 后要重跑）
+curl -X POST "https://<你的worker子域>.workers.dev/setup" -H "x-setup-token: <新secret>"
+
+# 本地自检（仓库内，不需要部署）
+node test/parse.test.js   # 结构 + 纯函数 + 密钥扫描
+node test/auth.test.js    # /setup、/tg 鉴权、OWNER_ID 白名单
 ```
 
 ### 机器人不回复怎么办
 
-先 `wrangler tail` 看有没有异常。最常见原因是**免费版 50 subrequest 上限**被撑爆，
+先看 Logs（或 `wrangler tail`）。最常见原因是**免费版 50 subrequest 上限**被撑爆，
 表现是日志无异常但消息不发出去 —— 检查是不是在列表阶段就逐号抓了落地页。
 
 ### 验证码显示成 •••••• 怎么办
@@ -114,8 +145,10 @@ curl -s "https://tempsms-tg-bot.<你的子域>.workers.dev/health"
 - 部分站点用 TLS 指纹拦截（如 `sms-online.co`：`curl` 200 但 `node fetch` / Workers 403），
   这类站点纯 HTTP 绕不过去，已在清单里标为不可用，不做假数据兜底。
 - 号码是公共号，验证码可能被别人读到；同一个号可能被要求 KYC（要姓名/邮箱），换号即可。
-- 站点改版会导致解析失效，`test/parse.test.js` 与 `test/probe_all.py` 可用来快速复测。
+- 站点改版会导致解析失效，`test/parse.test.js` 可用来快速复测。
 - 本 Worker 不收集、不存储任何用户数据；缓存只在 Worker 内存里，随 isolate 回收。
+- 密钥（`BOT_TOKEN` / `OWNER_ID` / `WEBHOOK_SECRET`）只通过 Cloudflare 控制台的
+  Variables（Encrypt 加密）写入，不进仓库、不进代码。
 
 ## 致谢 (Acknowledgements)
 
@@ -123,7 +156,6 @@ curl -s "https://tempsms-tg-bot.<你的子域>.workers.dev/health"
 |---|---|
 | [Cloudflare Workers](https://workers.cloudflare.com/) | 运行环境与 webhook 入口 |
 | [Telegram Bot API](https://core.telegram.org/bots/api) | 机器人消息与回调按钮 |
-| [wrangler](https://github.com/cloudflare/workers-sdk) | 部署与 secret 管理 |
 | [nav.eooce.com](https://nav.eooce.com/) | Free SMS 站点清单来源 |
 
 ## 免责声明 (Disclaimer)

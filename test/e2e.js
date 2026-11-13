@@ -2,7 +2,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const src = fs.readFileSync(path.join(__dirname, "../src/worker.js"), "utf8");
+const src = fs.readFileSync(path.join(__dirname, "../worker.js"), "utf8");
 const mod = src.replace("export default {", "module.exports = {") + "\n";
 const tmp = path.join(__dirname, "_w.cjs");
 fs.writeFileSync(tmp, mod);
